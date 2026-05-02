@@ -279,6 +279,11 @@ td small {
   color: #866018;
 }
 
+.status.suspended {
+  background: #ece7ff;
+  color: #5940a5;
+}
+
 .status.blocked {
   background: #ffe3df;
   color: #9a2d21;

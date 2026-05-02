@@ -5,12 +5,34 @@ import { apiRequest } from './api.js';
 const emptyForm = {
   clinic_name: '',
   clinic_phone: '',
+  duration: '3_days',
 };
 
-const statusOptions = ['trial', 'active', 'expired', 'blocked'];
+const statusOptions = ['active', 'suspended', 'blocked', 'expired'];
+const durationOptions = [
+  { value: '3_days', label: '3 hari' },
+  { value: '1_month', label: '1 bulan' },
+  { value: '1_year', label: '1 tahun' },
+  { value: 'lifetime', label: 'Lifetime' },
+];
+
+function getExpiredAt(duration) {
+  if (duration === 'lifetime') return '';
+
+  const date = new Date();
+  if (duration === '1_month') {
+    date.setMonth(date.getMonth() + 1);
+  } else if (duration === '1_year') {
+    date.setFullYear(date.getFullYear() + 1);
+  } else {
+    date.setDate(date.getDate() + 3);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
 
 function formatDate(value) {
-  if (!value) return '-';
+  if (!value) return 'Lifetime';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('id-ID', {
@@ -37,7 +59,7 @@ export default function App() {
     return licenses.reduce(
       (acc, item) => {
         acc.total += 1;
-        if (item.status === 'active' || item.status === 'trial') acc.active += 1;
+        if (item.status === 'active') acc.active += 1;
         if (item.status === 'expired') acc.expired += 1;
         if (item.status === 'blocked') acc.blocked += 1;
         return acc;
@@ -69,8 +91,12 @@ export default function App() {
     setError('');
     setMessage('');
     try {
-      const data = await apiRequest('register_clinic', form);
-      setMessage(`Lisensi trial dibuat untuk ${form.clinic_name}: ${data.license_key}`);
+      const data = await apiRequest('register_clinic', {
+        clinic_name: form.clinic_name,
+        clinic_phone: form.clinic_phone,
+        expired_at: getExpiredAt(form.duration),
+      });
+      setMessage(`Lisensi dibuat untuk ${form.clinic_name}: ${data.license_key}`);
       setForm(emptyForm);
       await loadLicenses();
     } catch (err) {
@@ -137,7 +163,7 @@ export default function App() {
             <strong>{summary.total}</strong>
           </div>
           <div className="metric">
-            <span>Aktif + Trial</span>
+            <span>Aktif</span>
             <strong>{summary.active}</strong>
           </div>
           <div className="metric">
@@ -153,7 +179,7 @@ export default function App() {
         <section id="add" className="panel two-column">
           <div>
             <p className="eyebrow">Tambah Klinik</p>
-            <h3>Buat lisensi trial otomatis</h3>
+            <h3>Buat lisensi otomatis</h3>
             <p className="muted">License key dibuat di backend supaya tetap konsisten untuk semua admin.</p>
           </div>
           <form onSubmit={handleRegister}>
@@ -173,6 +199,17 @@ export default function App() {
                 onChange={(event) => setForm({ ...form, clinic_phone: event.target.value })}
                 placeholder="Opsional"
               />
+            </label>
+            <label>
+              Masa aktif
+              <select
+                value={form.duration}
+                onChange={(event) => setForm({ ...form, duration: event.target.value })}
+              >
+                {durationOptions.map((duration) => (
+                  <option key={duration.value} value={duration.value}>{duration.label}</option>
+                ))}
+              </select>
             </label>
             <button type="submit" disabled={saving}>
               {saving ? 'Menyimpan...' : 'Tambah Klinik'}
@@ -255,6 +292,21 @@ export default function App() {
                   value={(editing.expired_at || '').slice(0, 10)}
                   onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
                 />
+              </label>
+              <label>
+                Masa aktif cepat
+                <select
+                  value=""
+                  onChange={(event) => {
+                    if (!event.target.value) return;
+                    setEditing({ ...editing, expired_at: getExpiredAt(event.target.value) });
+                  }}
+                >
+                  <option value="">Pilih masa aktif</option>
+                  {durationOptions.map((duration) => (
+                    <option key={duration.value} value={duration.value}>{duration.label}</option>
+                  ))}
+                </select>
               </label>
               <div className="button-row">
                 <button type="submit" disabled={saving}>
