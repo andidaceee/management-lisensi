@@ -1,0 +1,5 @@
+gas/
+docs/
+frontend/.env
+frontend/node_modules/
+frontend/dist/
