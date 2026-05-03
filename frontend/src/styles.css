@@ -298,6 +298,42 @@ small {
   gap: 8px;
 }
 
+.activity-panel {
+  grid-column: 1 / -1;
+}
+
+.activity-list {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #e7ece4;
+  border-radius: 8px;
+  background: #e7ece4;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 62px;
+  padding: 12px 14px;
+  background: #fbfcf8;
+}
+
+.activity-item small {
+  display: block;
+  margin-top: 4px;
+}
+
+.activity-meta {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  color: #4d5a51;
+  text-align: right;
+}
+
 .priority-item {
   display: flex;
   align-items: center;
@@ -664,6 +700,16 @@ td small {
 
   .feedback-card-head {
     flex-direction: column;
+  }
+
+  .activity-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .activity-meta {
+    justify-items: start;
+    text-align: left;
   }
 
   .panel {

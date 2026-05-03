@@ -66,6 +66,7 @@ function feedbackStatusLabel(status) {
 export default function App() {
   const [licenses, setLicenses] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -104,6 +105,20 @@ export default function App() {
     );
   }, [feedback]);
 
+  const logSummary = useMemo(() => {
+    return logs.reduce(
+      (acc, item) => {
+        acc.total += 1;
+        if (item.ip) acc.withIp += 1;
+        if (String(item.action || '').includes('failed') || String(item.action || '').includes('invalid')) {
+          acc.failed += 1;
+        }
+        return acc;
+      },
+      { total: 0, withIp: 0, failed: 0 },
+    );
+  }, [logs]);
+
   const attentionLicenses = useMemo(() => {
     return licenses
       .filter((item) => item.status !== 'active' || !item.device_id)
@@ -132,6 +147,15 @@ export default function App() {
     }
   }
 
+  async function loadLogs() {
+    try {
+      const data = await apiRequest('list_logs');
+      setLogs(data.logs || []);
+    } catch (err) {
+      setLogs([]);
+    }
+  }
+
   async function refreshAll() {
     setLoading(true);
     setError('');
@@ -147,6 +171,13 @@ export default function App() {
       setFeedback(feedbackData.feedback || []);
     } catch (err) {
       setFeedback([]);
+    }
+
+    try {
+      const logData = await apiRequest('list_logs');
+      setLogs(logData.logs || []);
+    } catch (err) {
+      setLogs([]);
     } finally {
       setLoading(false);
     }
@@ -171,6 +202,7 @@ export default function App() {
       setForm(emptyForm);
       await loadLicenses();
       await loadFeedback();
+      await loadLogs();
     } catch (err) {
       setError(err.message || 'Gagal menambah klinik.');
     } finally {
@@ -193,6 +225,7 @@ export default function App() {
       setMessage(`Lisensi ${editing.license_key} diperbarui.`);
       setEditing(null);
       await loadLicenses();
+      await loadLogs();
     } catch (err) {
       setError(err.message || 'Gagal memperbarui lisensi.');
     } finally {
@@ -213,6 +246,7 @@ export default function App() {
       });
       setMessage(`Device ${item.clinic_name} berhasil direset.`);
       await loadLicenses();
+      await loadLogs();
     } catch (err) {
       setError(err.message || 'Gagal reset device.');
     } finally {
@@ -232,6 +266,7 @@ export default function App() {
       });
       setMessage(`Feedback ${item.clinic_name || item.app_name || item.id} ditandai ${feedbackStatusLabel(status)}.`);
       await loadFeedback();
+      await loadLogs();
     } catch (err) {
       setError(err.message || 'Gagal memperbarui feedback.');
     } finally {
@@ -306,6 +341,10 @@ export default function App() {
                 <span>Feedback Error</span>
                 <strong>{feedbackSummary.new}</strong>
               </button>
+              <div className="metric">
+                <span>Log IP</span>
+                <strong>{logSummary.withIp}</strong>
+              </div>
             </section>
 
             <section className="dashboard-grid">
@@ -334,6 +373,33 @@ export default function App() {
                     <span className="status blocked">blocked</span>
                     <strong>{summary.blocked}</strong>
                   </div>
+                </div>
+              </div>
+
+              <div className="panel activity-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Log Aktivitas</p>
+                    <h3>Aktivitas terbaru</h3>
+                  </div>
+                  <span>{loading ? 'Memuat...' : `${logSummary.total} log`}</span>
+                </div>
+                <div className="activity-list">
+                  {!loading && logs.length === 0 && (
+                    <p className="empty compact">Belum ada log aktivitas.</p>
+                  )}
+                  {logs.slice(0, 8).map((item) => (
+                    <div key={item.id || `${item.timestamp}-${item.action}`} className="activity-item">
+                      <span>
+                        <strong>{item.action || 'activity'}</strong>
+                        <small>{item.clinic_name || item.clinic_id || item.license_key || 'Tidak ada klinik'}</small>
+                      </span>
+                      <span className="activity-meta">
+                        <span className="mono">{item.ip || 'IP kosong'}</span>
+                        <small>{item.timestamp || '-'}</small>
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
 

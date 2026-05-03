@@ -79,6 +79,7 @@ function doPost(e) {
       update_license: updateLicense_,
       reset_device: resetDevice_,
       list_licenses: listLicenses_,
+      list_logs: listLogs_,
       report_feedback: reportFeedback_,
       list_feedback: listFeedback_,
       update_feedback_status: updateFeedbackStatus_,
@@ -142,7 +143,7 @@ function verifyLicense_(body, e) {
   const rowIndex = table.rows.findIndex((row) => row.license_key === licenseKey && row.clinic_id === clinicId);
 
   if (rowIndex === -1) {
-    appendLog_(clinicId, 'verify_failed', e);
+    appendLog_(clinicId, 'verify_failed', e, body.ip);
     return {
       message: 'License key tidak ditemukan.',
       data: {
@@ -186,7 +187,7 @@ function verifyLicense_(body, e) {
   }
 
   sheet.getRange(sheetRow, table.headerMap.last_checked_at + 1).setValue(serverTime);
-  appendLog_(clinicId, valid ? 'verify_valid' : 'verify_invalid_' + reason, e);
+  appendLog_(clinicId, valid ? 'verify_valid' : 'verify_invalid_' + reason, e, body.ip);
 
   return {
     message,
@@ -224,7 +225,7 @@ function registerClinic_(body, e) {
     '',
   ]);
 
-  appendLog_(clinicId, 'register_clinic', e);
+  appendLog_(clinicId, 'register_clinic', e, body.ip);
 
   return {
     message: 'Klinik berhasil didaftarkan.',
@@ -264,7 +265,7 @@ function updateLicense_(body, e) {
     sheet.getRange(sheetRow, table.headerMap.device_id + 1).setValue(newDeviceId);
   }
 
-  appendLog_(oldLicense.clinic_id, 'update_license', e);
+  appendLog_(oldLicense.clinic_id, 'update_license', e, body.ip);
 
   return {
     message: 'License berhasil diperbarui.',
@@ -305,7 +306,7 @@ function resetDevice_(body, e) {
   const oldDeviceId = license.device_id || '';
 
   sheet.getRange(sheetRow, table.headerMap.device_id + 1).setValue('');
-  appendLog_(license.clinic_id, 'reset_device', e);
+  appendLog_(license.clinic_id, 'reset_device', e, body.ip);
 
   return {
     message: 'Device license berhasil direset.',
@@ -332,6 +333,33 @@ function listLicenses_() {
   return {
     message: 'Data license berhasil diambil.',
     data: { licenses },
+  };
+}
+
+function listLogs_() {
+  const spreadsheet = getSpreadsheet_();
+  const sheet = spreadsheet.getSheetByName(LOG_SHEET);
+  const table = getTable_(sheet);
+  const licenseTable = getTable_(spreadsheet.getSheetByName(LICENSE_SHEET));
+  const licenseByClinic = licenseTable.rows.reduce((acc, row) => {
+    acc[row.clinic_id] = row;
+    return acc;
+  }, {});
+  const logs = table.rows
+    .map((row) => {
+      const license = licenseByClinic[row.clinic_id] || {};
+      return {
+        ...row,
+        clinic_name: license.clinic_name || '',
+        license_key: license.license_key || '',
+        status: license.status || '',
+      };
+    })
+    .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+
+  return {
+    message: 'Log berhasil diambil.',
+    data: { logs: logs.slice(0, 100) },
   };
 }
 
@@ -362,7 +390,7 @@ function reportFeedback_(body, e) {
     '',
   ]);
 
-  appendLog_(optionalString_(body.clinic_id) || license.clinic_id || '', 'report_feedback', e);
+  appendLog_(optionalString_(body.clinic_id) || license.clinic_id || '', 'report_feedback', e, body.ip);
 
   return {
     message: 'Feedback error berhasil dikirim.',
@@ -489,14 +517,14 @@ function getTable_(sheet) {
   return { headers, headerMap, rows };
 }
 
-function appendLog_(clinicId, action, e) {
+function appendLog_(clinicId, action, e, ip) {
   const sheet = getSpreadsheet_().getSheetByName(LOG_SHEET);
   sheet.appendRow([
     Utilities.getUuid(),
     clinicId || '',
     action,
     nowIso_(),
-    getIp_(e),
+    sanitizeIp_(ip) || getIp_(e),
   ]);
 }
 
@@ -558,7 +586,13 @@ function findLicenseForAudit_(body, data) {
 
 function getIp_(e) {
   if (!e || !e.parameter) return '';
-  return e.parameter.ip || '';
+  return sanitizeIp_(e.parameter.ip);
+}
+
+function sanitizeIp_(value) {
+  const rawIp = optionalString_(value);
+  if (!rawIp) return '';
+  return rawIp.split(',')[0].trim().slice(0, 80);
 }
 
 function generateLicenseKey_() {

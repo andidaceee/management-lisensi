@@ -18,6 +18,7 @@ export default async function handler(request, response) {
 
   try {
     const body = await readJsonBody_(request);
+    const clientIp = getClientIp_(request);
     const gasResponse = await fetch(gasApiUrl, {
       method: 'POST',
       headers: {
@@ -25,6 +26,7 @@ export default async function handler(request, response) {
       },
       body: JSON.stringify({
         ...body,
+        ip: body.ip || clientIp,
         secret_key: gasApiSecret,
       }),
     });
@@ -48,6 +50,29 @@ export default async function handler(request, response) {
       message: error.message || 'Proxy gagal memproses request.',
     });
   }
+}
+
+function getClientIp_(request) {
+  const headers = request.headers || {};
+  const fromHeader = (
+    getHeader_(headers, 'x-forwarded-for') ||
+    getHeader_(headers, 'x-real-ip') ||
+    getHeader_(headers, 'cf-connecting-ip') ||
+    getHeader_(headers, 'true-client-ip') ||
+    ''
+  );
+  const rawIp = Array.isArray(fromHeader) ? fromHeader[0] : String(fromHeader);
+  const firstIp = rawIp.split(',')[0].trim();
+
+  return firstIp || request.socket?.remoteAddress || '';
+}
+
+function getHeader_(headers, name) {
+  if (typeof headers.get === 'function') {
+    return headers.get(name) || '';
+  }
+
+  return headers[name] || headers[name.toLowerCase()] || '';
 }
 
 async function readJsonBody_(request) {
