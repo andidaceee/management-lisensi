@@ -17,6 +17,35 @@ body {
   min-height: 100vh;
 }
 
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(120deg, rgba(23, 55, 47, 0.08), transparent 42%),
+    #f7f8f4;
+}
+
+.login-panel {
+  display: grid;
+  gap: 22px;
+  width: min(100%, 440px);
+  border: 1px solid #dfe5db;
+  border-radius: 8px;
+  padding: 28px;
+  background: #fff;
+  box-shadow: 0 22px 52px rgba(23, 55, 47, 0.12);
+}
+
+.login-panel h1 {
+  margin: 0 0 8px;
+  color: #17372f;
+  font-size: 32px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
 button,
 input,
 select {

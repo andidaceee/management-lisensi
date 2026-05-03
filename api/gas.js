@@ -1,3 +1,7 @@
+import { isAdminRequestAuthenticated } from './admin-auth.js';
+
+const PUBLIC_ACTIONS = ['verify_license', 'report_feedback'];
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     return sendJson_(response, 405, {
@@ -18,6 +22,14 @@ export default async function handler(request, response) {
 
   try {
     const body = await readJsonBody_(request);
+    const action = String(body.action || '');
+    if (!PUBLIC_ACTIONS.includes(action) && !isAdminRequestAuthenticated(request)) {
+      return sendJson_(response, 401, {
+        success: false,
+        message: 'Silakan login admin terlebih dahulu.',
+      });
+    }
+
     const clientIp = getClientIp_(request);
     const gasResponse = await fetch(gasApiUrl, {
       method: 'POST',

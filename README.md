@@ -45,7 +45,14 @@ Isi `frontend/.env` untuk menjalankan proxy lokal atau set langsung di Vercel:
 ```text
 GAS_API_URL=https://script.google.com/macros/s/xxxxx/exec
 GAS_API_SECRET=secret-acak-yang-sama-dengan-gas
+ADMIN_PASSWORD=password-admin
+ADMIN_SESSION_SECRET=secret-session-acak
 ```
+
+Admin dashboard memakai cookie session HTTP-only. Action publik `verify_license` dan
+`report_feedback` tetap bisa dipakai aplikasi klien tanpa login, sedangkan action admin
+seperti `list_licenses`, `register_clinic`, `update_license`, `reset_device`,
+`list_logs`, `list_feedback`, dan `update_feedback_status` wajib login admin.
 
 ## API Actions
 

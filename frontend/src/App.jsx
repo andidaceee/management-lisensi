@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { apiRequest } from './api.js';
+import { apiRequest, authRequest } from './api.js';
 
 const emptyForm = {
   clinic_name: '',
@@ -64,6 +64,10 @@ function feedbackStatusLabel(status) {
 }
 
 export default function App() {
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const [licenses, setLicenses] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -184,8 +188,69 @@ export default function App() {
   }
 
   useEffect(() => {
-    refreshAll();
+    let mounted = true;
+
+    async function checkSession() {
+      try {
+        const data = await authRequest('session');
+        if (!mounted) return;
+        setAuthenticated(Boolean(data.authenticated));
+        if (data.authenticated) {
+          await refreshAll();
+        }
+      } catch (err) {
+        if (mounted) {
+          setAuthenticated(false);
+          setError(err.message || 'Gagal mengecek sesi admin.');
+        }
+      } finally {
+        if (mounted) setAuthChecked(true);
+      }
+    }
+
+    checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setLoggingIn(true);
+    setError('');
+    setMessage('');
+    try {
+      await authRequest('login', { password: loginPassword });
+      setAuthenticated(true);
+      setLoginPassword('');
+      setMessage('Login admin berhasil.');
+      await refreshAll();
+    } catch (err) {
+      setError(err.message || 'Login admin gagal.');
+    } finally {
+      setLoggingIn(false);
+      setAuthChecked(true);
+    }
+  }
+
+  async function handleLogout() {
+    setError('');
+    setMessage('');
+    try {
+      await authRequest('logout');
+    } catch (err) {
+      setError(err.message || 'Logout gagal.');
+    } finally {
+      setAuthenticated(false);
+      setLicenses([]);
+      setFeedback([]);
+      setLogs([]);
+      setActiveTab('dashboard');
+      setEditing(null);
+      setMessage('');
+    }
+  }
 
   async function handleRegister(event) {
     event.preventDefault();
@@ -274,6 +339,49 @@ export default function App() {
     }
   }
 
+  if (!authChecked) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <p className="eyebrow">Bekam Clinic</p>
+          <h1>Memeriksa sesi admin</h1>
+          <p className="muted">Sebentar, dashboard sedang menyiapkan akses.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <div>
+            <p className="eyebrow">Bekam Clinic</p>
+            <h1>Login Admin</h1>
+            <p className="muted">Masuk untuk mengelola lisensi, feedback, dan log klinik.</p>
+          </div>
+          {error && <div className="notice error">{error}</div>}
+          <form onSubmit={handleLogin}>
+            <label>
+              Password admin
+              <input
+                required
+                type="password"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                placeholder="Masukkan password admin"
+              />
+            </label>
+            <button type="submit" disabled={loggingIn}>
+              {loggingIn ? 'Masuk...' : 'Masuk Admin'}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -296,6 +404,9 @@ export default function App() {
         </nav>
         <button className="ghost-button" onClick={refreshAll} disabled={loading}>
           Refresh
+        </button>
+        <button className="ghost-button" onClick={handleLogout}>
+          Logout
         </button>
       </aside>
 
