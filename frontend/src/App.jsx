@@ -12,6 +12,7 @@ const statusOptions = ['active', 'suspended', 'blocked', 'expired'];
 const tabs = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'licenses', label: 'List Klinik' },
+  { id: 'feedback', label: 'Feedback' },
   { id: 'add', label: 'Tambah Klinik' },
 ];
 const durationOptions = [
@@ -20,6 +21,7 @@ const durationOptions = [
   { value: '1_year', label: '1 tahun' },
   { value: 'lifetime', label: 'Lifetime' },
 ];
+const feedbackStatusOptions = ['new', 'reviewing', 'resolved', 'ignored'];
 
 function getExpiredAt(duration) {
   if (duration === 'lifetime') return '';
@@ -51,8 +53,19 @@ function statusLabel(status) {
   return status || 'unknown';
 }
 
+function feedbackStatusLabel(status) {
+  const labels = {
+    new: 'Baru',
+    reviewing: 'Dicek',
+    resolved: 'Selesai',
+    ignored: 'Diabaikan',
+  };
+  return labels[status] || status || 'Baru';
+}
+
 export default function App() {
   const [licenses, setLicenses] = useState([]);
+  const [feedback, setFeedback] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +90,20 @@ export default function App() {
     );
   }, [licenses]);
 
+  const feedbackSummary = useMemo(() => {
+    return feedback.reduce(
+      (acc, item) => {
+        acc.total += 1;
+        if (item.status === 'new') acc.new += 1;
+        if (item.status === 'reviewing') acc.reviewing += 1;
+        if (item.status === 'resolved') acc.resolved += 1;
+        if (item.severity === 'critical') acc.critical += 1;
+        return acc;
+      },
+      { total: 0, new: 0, reviewing: 0, resolved: 0, critical: 0 },
+    );
+  }, [feedback]);
+
   const attentionLicenses = useMemo(() => {
     return licenses
       .filter((item) => item.status !== 'active' || !item.device_id)
@@ -96,8 +123,37 @@ export default function App() {
     }
   }
 
+  async function loadFeedback() {
+    try {
+      const data = await apiRequest('list_feedback');
+      setFeedback(data.feedback || []);
+    } catch (err) {
+      setError(err.message || 'Gagal mengambil feedback.');
+    }
+  }
+
+  async function refreshAll() {
+    setLoading(true);
+    setError('');
+    try {
+      const licenseData = await apiRequest('list_licenses');
+      setLicenses(licenseData.licenses || []);
+    } catch (err) {
+      setError(err.message || 'Gagal mengambil data lisensi.');
+    }
+
+    try {
+      const feedbackData = await apiRequest('list_feedback');
+      setFeedback(feedbackData.feedback || []);
+    } catch (err) {
+      setFeedback([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    loadLicenses();
+    refreshAll();
   }, []);
 
   async function handleRegister(event) {
@@ -114,6 +170,7 @@ export default function App() {
       setMessage(`Lisensi dibuat untuk ${form.clinic_name}: ${data.license_key}`);
       setForm(emptyForm);
       await loadLicenses();
+      await loadFeedback();
     } catch (err) {
       setError(err.message || 'Gagal menambah klinik.');
     } finally {
@@ -163,6 +220,25 @@ export default function App() {
     }
   }
 
+  async function handleFeedbackStatus(item, status) {
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest('update_feedback_status', {
+        id: item.id,
+        status,
+        note: item.note || '',
+      });
+      setMessage(`Feedback ${item.clinic_name || item.app_name || item.id} ditandai ${feedbackStatusLabel(status)}.`);
+      await loadFeedback();
+    } catch (err) {
+      setError(err.message || 'Gagal memperbarui feedback.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -183,7 +259,7 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <button className="ghost-button" onClick={loadLicenses} disabled={loading}>
+        <button className="ghost-button" onClick={refreshAll} disabled={loading}>
           Refresh
         </button>
       </aside>
@@ -194,7 +270,14 @@ export default function App() {
             <p className="eyebrow">Google Sheets + GAS</p>
             <h2>Kontrol lisensi aplikasi klinik</h2>
           </div>
-          <span className="api-chip">Proxy /api/gas</span>
+          <div className="topbar-actions">
+            {feedbackSummary.new > 0 && (
+              <button type="button" className="feedback-alert" onClick={() => setActiveTab('feedback')}>
+                {feedbackSummary.new} error baru
+              </button>
+            )}
+            <span className="api-chip">Proxy /api/gas</span>
+          </div>
         </header>
 
         {message && <div className="notice success">{message}</div>}
@@ -219,6 +302,10 @@ export default function App() {
                 <span>Perlu Cek</span>
                 <strong>{summary.expired + summary.blocked + summary.suspended}</strong>
               </div>
+              <button type="button" className="metric feedback-metric" onClick={() => setActiveTab('feedback')}>
+                <span>Feedback Error</span>
+                <strong>{feedbackSummary.new}</strong>
+              </button>
             </section>
 
             <section className="dashboard-grid">
@@ -276,6 +363,37 @@ export default function App() {
                         <small>{item.device_id ? item.license_key : 'Device belum terikat'}</small>
                       </span>
                       <span className={`status ${item.status}`}>{statusLabel(item.status)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Feedback Aplikasi</p>
+                    <h3>Error terbaru</h3>
+                  </div>
+                  <button type="button" className="small-button" onClick={() => setActiveTab('feedback')}>
+                    Lihat feedback
+                  </button>
+                </div>
+                <div className="priority-list">
+                  {!loading && feedback.length === 0 && (
+                    <p className="empty compact">Belum ada laporan error dari aplikasi.</p>
+                  )}
+                  {feedback.slice(0, 4).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="priority-item"
+                      onClick={() => setActiveTab('feedback')}
+                    >
+                      <span>
+                        <strong>{item.clinic_name || item.app_name || 'Aplikasi'}</strong>
+                        <small>{item.message || item.error_type || 'Error tanpa pesan'}</small>
+                      </span>
+                      <span className={`status feedback-${item.status}`}>{feedbackStatusLabel(item.status)}</span>
                     </button>
                   ))}
                 </div>
@@ -386,6 +504,90 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'feedback' && (
+          <section className="panel tab-view">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Feedback Error</p>
+                <h3>Laporan dari aplikasi</h3>
+              </div>
+              <span>{loading ? 'Memuat...' : `${feedbackSummary.new} baru dari ${feedbackSummary.total} laporan`}</span>
+            </div>
+
+            <section className="feedback-stats" aria-label="Ringkasan feedback">
+              <div>
+                <span>Baru</span>
+                <strong>{feedbackSummary.new}</strong>
+              </div>
+              <div>
+                <span>Dicek</span>
+                <strong>{feedbackSummary.reviewing}</strong>
+              </div>
+              <div>
+                <span>Selesai</span>
+                <strong>{feedbackSummary.resolved}</strong>
+              </div>
+              <div>
+                <span>Kritis</span>
+                <strong>{feedbackSummary.critical}</strong>
+              </div>
+            </section>
+
+            <div className="feedback-list">
+              {!loading && feedback.length === 0 && (
+                <p className="empty compact">Belum ada feedback error.</p>
+              )}
+              {feedback.map((item) => (
+                <article key={item.id} className="feedback-card">
+                  <div className="feedback-card-head">
+                    <div>
+                      <p className="eyebrow">{item.timestamp || 'Tanpa waktu'}</p>
+                      <h4>{item.clinic_name || item.app_name || 'Aplikasi tidak dikenal'}</h4>
+                    </div>
+                    <div className="feedback-badges">
+                      <span className={`status feedback-${item.status}`}>{feedbackStatusLabel(item.status)}</span>
+                      <span className={`status severity-${item.severity}`}>{item.severity || 'error'}</span>
+                    </div>
+                  </div>
+                  <p className="feedback-message">{item.message || 'Tidak ada pesan error.'}</p>
+                  <dl className="feedback-meta">
+                    <div>
+                      <dt>License</dt>
+                      <dd className="mono">{item.license_key || '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>Device</dt>
+                      <dd className="mono">{item.device_id || '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>Source</dt>
+                      <dd>{item.source || item.error_type || '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>App</dt>
+                      <dd>{[item.app_name, item.app_version, item.os_name].filter(Boolean).join(' / ') || '-'}</dd>
+                    </div>
+                  </dl>
+                  {item.stack && <pre className="stack-preview">{item.stack}</pre>}
+                  <div className="table-actions">
+                    {feedbackStatusOptions.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={`small-button ${item.status === status ? '' : 'secondary'}`}
+                        onClick={() => handleFeedbackStatus(item, status)}
+                        disabled={saving || item.status === status}
+                      >
+                        {feedbackStatusLabel(status)}
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              ))}
             </div>
           </section>
         )}
