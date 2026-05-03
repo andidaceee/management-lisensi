@@ -129,58 +129,17 @@ export default function App() {
       .slice(0, 5);
   }, [licenses]);
 
-  async function loadLicenses() {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await apiRequest('list_licenses');
-      setLicenses(data.licenses || []);
-    } catch (err) {
-      setError(err.message || 'Gagal mengambil data lisensi.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadFeedback() {
-    try {
-      const data = await apiRequest('list_feedback');
-      setFeedback(data.feedback || []);
-    } catch (err) {
-      setError(err.message || 'Gagal mengambil feedback.');
-    }
-  }
-
-  async function loadLogs() {
-    try {
-      const data = await apiRequest('list_logs');
-      setLogs(data.logs || []);
-    } catch (err) {
-      setLogs([]);
-    }
-  }
-
   async function refreshAll() {
     setLoading(true);
     setError('');
     try {
-      const licenseData = await apiRequest('list_licenses');
-      setLicenses(licenseData.licenses || []);
+      const data = await apiRequest('dashboard_snapshot');
+      setLicenses(data.licenses || []);
+      setFeedback(data.feedback || []);
+      setLogs(data.logs || []);
     } catch (err) {
       setError(err.message || 'Gagal mengambil data lisensi.');
-    }
-
-    try {
-      const feedbackData = await apiRequest('list_feedback');
-      setFeedback(feedbackData.feedback || []);
-    } catch (err) {
       setFeedback([]);
-    }
-
-    try {
-      const logData = await apiRequest('list_logs');
-      setLogs(logData.logs || []);
-    } catch (err) {
       setLogs([]);
     } finally {
       setLoading(false);
@@ -265,9 +224,7 @@ export default function App() {
       });
       setMessage(`Lisensi dibuat untuk ${form.clinic_name}: ${data.license_key}`);
       setForm(emptyForm);
-      await loadLicenses();
-      await loadFeedback();
-      await loadLogs();
+      await refreshAll();
     } catch (err) {
       setError(err.message || 'Gagal menambah klinik.');
     } finally {
@@ -289,8 +246,7 @@ export default function App() {
       });
       setMessage(`Lisensi ${editing.license_key} diperbarui.`);
       setEditing(null);
-      await loadLicenses();
-      await loadLogs();
+      await refreshAll();
     } catch (err) {
       setError(err.message || 'Gagal memperbarui lisensi.');
     } finally {
@@ -310,8 +266,7 @@ export default function App() {
         license_key: item.license_key,
       });
       setMessage(`Device ${item.clinic_name} berhasil direset.`);
-      await loadLicenses();
-      await loadLogs();
+      await refreshAll();
     } catch (err) {
       setError(err.message || 'Gagal reset device.');
     } finally {
@@ -330,8 +285,7 @@ export default function App() {
         note: item.note || '',
       });
       setMessage(`Feedback ${item.clinic_name || item.app_name || item.id} ditandai ${feedbackStatusLabel(status)}.`);
-      await loadFeedback();
-      await loadLogs();
+      await refreshAll();
     } catch (err) {
       setError(err.message || 'Gagal memperbarui feedback.');
     } finally {

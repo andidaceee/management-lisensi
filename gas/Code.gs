@@ -18,6 +18,7 @@ const LICENSE_HEADERS = [
 const LOG_HEADERS = ['id', 'clinic_id', 'action', 'timestamp', 'ip'];
 const ALLOWED_STATUSES = ['active', 'suspended', 'blocked', 'expired'];
 const FEEDBACK_STATUSES = ['new', 'reviewing', 'resolved', 'ignored'];
+const VERIFY_WRITE_MIN_INTERVAL_MINUTES = 6 * 60;
 
 const AUDIT_LOG_HEADERS = [
   'id',
@@ -83,6 +84,7 @@ function doPost(e) {
       report_feedback: reportFeedback_,
       list_feedback: listFeedback_,
       update_feedback_status: updateFeedbackStatus_,
+      dashboard_snapshot: dashboardSnapshot_,
     };
 
     if (!handlers[action]) {
@@ -96,7 +98,9 @@ function doPost(e) {
       data: result.data || {},
     };
 
-    appendAuditLog_(body, action, getAuditStatus_(action, payload), payload.message, payload.data);
+    if (shouldWriteAuditLog_(action, payload)) {
+      appendAuditLog_(body, action, getAuditStatus_(action, payload), payload.message, payload.data);
+    }
     return json_(payload);
   } catch (error) {
     const message = error.message || String(error);
@@ -182,12 +186,16 @@ function verifyLicense_(body, e) {
     message = 'License terdaftar untuk device lain.';
   }
 
-  if (deviceId && !storedDeviceId && valid && table.headerMap.device_id !== undefined) {
+  const bindsDevice = Boolean(deviceId && !storedDeviceId && valid && table.headerMap.device_id !== undefined);
+  if (bindsDevice) {
     sheet.getRange(sheetRow, table.headerMap.device_id + 1).setValue(deviceId);
   }
 
-  sheet.getRange(sheetRow, table.headerMap.last_checked_at + 1).setValue(serverTime);
-  appendLog_(clinicId, valid ? 'verify_valid' : 'verify_invalid_' + reason, e, body.ip);
+  const shouldWriteActivity = shouldWriteVerifyActivity_(license, valid, bindsDevice);
+  if (shouldWriteActivity) {
+    sheet.getRange(sheetRow, table.headerMap.last_checked_at + 1).setValue(serverTime);
+    appendLog_(clinicId, valid ? 'verify_valid' : 'verify_invalid_' + reason, e, body.ip);
+  }
 
   return {
     message,
@@ -201,6 +209,7 @@ function verifyLicense_(body, e) {
       license_key: license.license_key || '',
       device_id: deviceId || storedDeviceId || '',
       server_time: serverTime,
+      _write_throttled: !shouldWriteActivity,
     },
   };
 }
@@ -441,6 +450,21 @@ function updateFeedbackStatus_(body) {
   };
 }
 
+function dashboardSnapshot_() {
+  const licenseResult = listLicenses_();
+  const feedbackResult = listFeedback_();
+  const logResult = listLogs_();
+
+  return {
+    message: 'Snapshot dashboard berhasil diambil.',
+    data: {
+      licenses: licenseResult.data.licenses || [],
+      feedback: feedbackResult.data.feedback || [],
+      logs: logResult.data.logs || [],
+    },
+  };
+}
+
 function parseBody_(e) {
   if (e && e.postData && e.postData.contents) {
     return JSON.parse(e.postData.contents);
@@ -526,6 +550,37 @@ function appendLog_(clinicId, action, e, ip) {
     nowIso_(),
     sanitizeIp_(ip) || getIp_(e),
   ]);
+}
+
+function shouldWriteVerifyActivity_(license, valid, bindsDevice) {
+  if (!valid) return true;
+  if (bindsDevice) return true;
+
+  const lastCheckedAt = parseSheetDate_(license.last_checked_at);
+  if (!lastCheckedAt) return true;
+
+  const elapsedMs = new Date().getTime() - lastCheckedAt.getTime();
+  return elapsedMs >= VERIFY_WRITE_MIN_INTERVAL_MINUTES * 60 * 1000;
+}
+
+function shouldWriteAuditLog_(action, payload) {
+  if (action !== 'verify_license') return true;
+
+  const data = (payload && payload.data) || {};
+  return !(data.valid && data._write_throttled);
+}
+
+function parseSheetDate_(value) {
+  if (!value) return null;
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return value;
+  }
+
+  const text = String(value).trim();
+  if (!text) return null;
+  const normalized = text.indexOf('T') === -1 ? text.replace(' ', 'T') : text;
+  const parsed = new Date(normalized);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function appendAuditLog_(body, action, status, message, data) {
