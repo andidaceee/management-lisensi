@@ -50,12 +50,11 @@ ADMIN_SESSION_SECRET=secret-session-acak
 ```
 
 Admin dashboard memakai cookie session HTTP-only. Action publik hanya
-`verify_license`, `report_feedback`, alias `report_error`,
-`request_admin_pin_reset`, dan `confirm_admin_pin_reset`. Action admin seperti
+`verify_license`, `report_feedback`, dan alias `report_error`. Action admin seperti
 `list_licenses`, `register_clinic`, `create_license`, `update_license`,
 `reset_device`, `delete_license`, `revoke_license`, `block_license`, `list_logs`,
-`list_feedback`, `list_error_reports`, `list_admin_pin_reset_requests`,
-`update_feedback_status`, dan `dashboard_snapshot` wajib login admin.
+`list_feedback`, `list_error_reports`, `update_feedback_status`, dan
+`dashboard_snapshot` wajib login admin.
 
 ## API Actions
 
@@ -68,8 +67,6 @@ Semua request memakai POST JSON body:
 - `dashboard_snapshot`
 - `report_feedback`
 - `report_error`
-- `request_admin_pin_reset`
-- `confirm_admin_pin_reset`
 
 Detail backend ada di `gas/README.md`.
 
@@ -180,30 +177,3 @@ dibatasi dengan rate limit 120 detik.
   "message": "Laporan error berhasil dikirim"
 }
 ```
-
-## Kontrak Reset PIN Admin
-
-`request_admin_pin_reset` adalah action publik untuk aplikasi lokal. Request wajib
-mengirim `license_key`; field opsional: `clinic_id`, `device_id`, `admin_pin`,
-`app_name`, `app_version`, `os_name`, dan `message`. Backend membuat baris di sheet
-`admin_pin_resets` dengan status `pending`, `reset_token`, `reset_pin` sekali pakai,
-dan masa berlaku 30 menit. Response publik tidak mengembalikan `reset_pin`.
-
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "uuid",
-    "status": "pending",
-    "reset_token": "token",
-    "expires_at": "2026-05-08 12:30:00"
-  }
-}
-```
-
-`confirm_admin_pin_reset` adalah action publik untuk validasi dari aplikasi lokal.
-Kirim `reset_token` dan `reset_pin` yang diberikan admin. Token yang valid akan
-ditandai `confirmed`; token expired atau sudah dipakai akan ditolak.
-
-Admin dashboard atau integrasi admin bisa memakai action login
-`list_admin_pin_reset_requests` untuk melihat request dan kode `reset_pin`.
