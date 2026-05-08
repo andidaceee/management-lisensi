@@ -355,6 +355,10 @@ export default function App() {
     }
   }
 
+  function handleFeedbackNoteChange(id, note) {
+    setFeedback((items) => items.map((item) => (item.id === id ? { ...item, note } : item)));
+  }
+
   if (!authChecked) {
     return (
       <main className="login-shell">
@@ -862,8 +866,23 @@ export default function App() {
                       <dt>App</dt>
                       <dd>{[item.app_name, item.app_version, item.os_name].filter(Boolean).join(' / ') || '-'}</dd>
                     </div>
+                    {item.status === 'resolved' && (
+                      <div>
+                        <dt>Selesai</dt>
+                        <dd>{formatDateTime(item.resolved_at)}</dd>
+                      </div>
+                    )}
                   </dl>
                   {item.stack && <pre className="stack-preview">{item.stack}</pre>}
+                  <label className="feedback-note">
+                    Catatan tindak lanjut
+                    <textarea
+                      value={item.note || ''}
+                      onChange={(event) => handleFeedbackNoteChange(item.id, event.target.value)}
+                      placeholder="Contoh: sudah dihubungi, perlu update app, atau abaikan karena duplikat"
+                      rows={3}
+                    />
+                  </label>
                   <div className="table-actions">
                     {feedbackStatusOptions.map((status) => (
                       <button
