@@ -69,6 +69,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [licenses, setLicenses] = useState([]);
+  const [licenseSummary, setLicenseSummary] = useState(null);
   const [feedback, setFeedback] = useState([]);
   const [logs, setLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -81,6 +82,17 @@ export default function App() {
   const [editing, setEditing] = useState(null);
 
   const summary = useMemo(() => {
+    if (licenseSummary) {
+      return {
+        total: Number(licenseSummary.total) || 0,
+        active: Number(licenseSummary.active) || 0,
+        suspended: 0,
+        expired: Number(licenseSummary.expired) || 0,
+        blocked: Number(licenseSummary.blocked) || 0,
+        boundDevices: licenses.filter((item) => item.device_id).length,
+      };
+    }
+
     return licenses.reduce(
       (acc, item) => {
         acc.total += 1;
@@ -93,7 +105,7 @@ export default function App() {
       },
       { total: 0, active: 0, suspended: 0, expired: 0, blocked: 0, boundDevices: 0 },
     );
-  }, [licenses]);
+  }, [licenses, licenseSummary]);
 
   const feedbackSummary = useMemo(() => {
     return feedback.reduce(
@@ -134,6 +146,7 @@ export default function App() {
     setError('');
     try {
       const data = await apiRequest('dashboard_snapshot');
+      setLicenseSummary(data.summary || null);
       setLicenses(data.licenses || []);
       setFeedback(data.feedback || []);
       setLogs(data.logs || []);
@@ -141,6 +154,7 @@ export default function App() {
       setError(err.message || 'Gagal mengambil data lisensi.');
       setFeedback([]);
       setLogs([]);
+      setLicenseSummary(null);
     } finally {
       setLoading(false);
     }
@@ -203,6 +217,7 @@ export default function App() {
     } finally {
       setAuthenticated(false);
       setLicenses([]);
+      setLicenseSummary(null);
       setFeedback([]);
       setLogs([]);
       setActiveTab('dashboard');

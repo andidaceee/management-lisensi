@@ -19,8 +19,8 @@ export async function apiRequest(action, payload = {}) {
     throw new Error(`Response API bukan JSON valid: ${text.slice(0, 120)}`);
   }
 
-  if (!response.ok || data.success === false) {
-    throw new Error(data.message || 'Request API gagal.');
+  if (!response.ok || data.success === false || data.ok === false) {
+    throw new Error(data.error || data.message || 'Request API gagal.');
   }
 
   return data.data || {};
