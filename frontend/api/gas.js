@@ -1,6 +1,12 @@
 import { isAdminRequestAuthenticated } from './admin-auth.js';
 
-const PUBLIC_ACTIONS = ['verify_license', 'report_feedback'];
+const PUBLIC_ACTIONS = [
+  'verify_license',
+  'report_feedback',
+  'report_error',
+  'request_admin_pin_reset',
+  'confirm_admin_pin_reset',
+];
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -113,16 +119,32 @@ async function readJsonBody_(request) {
 }
 
 function normalizeResponse_(payload) {
+  if (payload && typeof payload.ok === 'boolean') {
+    const message = payload.message || payload.error || (payload.ok ? 'Request berhasil.' : 'Request gagal.');
+    return {
+      ok: payload.ok,
+      success: payload.ok,
+      message,
+      ...(payload.error !== undefined ? { error: payload.error } : {}),
+      ...(payload.data !== undefined ? { data: payload.data } : {}),
+      ...(payload.meta !== undefined ? { meta: payload.meta } : {}),
+    };
+  }
+
   if (payload && typeof payload.success === 'boolean') {
     return {
+      ok: payload.success,
       success: payload.success,
       message: payload.message || (payload.success ? 'Request berhasil.' : 'Request gagal.'),
       ...(payload.data !== undefined ? { data: payload.data } : {}),
+      ...(payload.meta !== undefined ? { meta: payload.meta } : {}),
     };
   }
 
   return {
+    ok: false,
     success: false,
+    error: 'Format response GAS tidak sesuai.',
     message: 'Format response GAS tidak sesuai.',
   };
 }

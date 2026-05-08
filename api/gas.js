@@ -1,6 +1,12 @@
 import { isAdminRequestAuthenticated } from './admin-auth.js';
 
-const PUBLIC_ACTIONS = ['verify_license', 'report_feedback', 'report_error'];
+const PUBLIC_ACTIONS = [
+  'verify_license',
+  'report_feedback',
+  'report_error',
+  'request_admin_pin_reset',
+  'confirm_admin_pin_reset',
+];
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
