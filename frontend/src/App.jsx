@@ -12,6 +12,7 @@ const statusOptions = ['active', 'suspended', 'blocked', 'expired'];
 const tabs = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'licenses', label: 'List Klinik' },
+  { id: 'pin-reset', label: 'Reset PIN' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'add', label: 'Tambah Klinik' },
 ];
@@ -49,6 +50,20 @@ function formatDate(value) {
   });
 }
 
+function formatDateTime(value) {
+  if (!value) return '-';
+  const normalized = String(value).includes('T') ? value : String(value).replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function statusLabel(status) {
   return status || 'unknown';
 }
@@ -63,6 +78,15 @@ function feedbackStatusLabel(status) {
   return labels[status] || status || 'Baru';
 }
 
+function pinResetStatusLabel(status) {
+  const labels = {
+    pending: 'Menunggu',
+    confirmed: 'Dipakai',
+    expired: 'Expired',
+  };
+  return labels[status] || status || 'Menunggu';
+}
+
 export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -71,6 +95,7 @@ export default function App() {
   const [licenses, setLicenses] = useState([]);
   const [licenseSummary, setLicenseSummary] = useState(null);
   const [feedback, setFeedback] = useState([]);
+  const [pinResetRequests, setPinResetRequests] = useState([]);
   const [logs, setLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
@@ -121,6 +146,20 @@ export default function App() {
     );
   }, [feedback]);
 
+  const pinResetSummary = useMemo(() => {
+    return pinResetRequests.reduce(
+      (acc, item) => {
+        acc.total += 1;
+        const status = item.status || 'pending';
+        if (status === 'pending') acc.pending += 1;
+        if (status === 'confirmed') acc.confirmed += 1;
+        if (status === 'expired') acc.expired += 1;
+        return acc;
+      },
+      { total: 0, pending: 0, confirmed: 0, expired: 0 },
+    );
+  }, [pinResetRequests]);
+
   const logSummary = useMemo(() => {
     return logs.reduce(
       (acc, item) => {
@@ -150,9 +189,16 @@ export default function App() {
       setLicenses(data.licenses || []);
       setFeedback(data.feedback || []);
       setLogs(data.logs || []);
+      try {
+        const resetData = await apiRequest('list_admin_pin_reset_requests', { limit: 100 });
+        setPinResetRequests(Array.isArray(resetData) ? resetData : (resetData.requests || []));
+      } catch (resetErr) {
+        setPinResetRequests([]);
+      }
     } catch (err) {
       setError(err.message || 'Gagal mengambil data lisensi.');
       setFeedback([]);
+      setPinResetRequests([]);
       setLogs([]);
       setLicenseSummary(null);
     } finally {
@@ -219,6 +265,7 @@ export default function App() {
       setLicenses([]);
       setLicenseSummary(null);
       setFeedback([]);
+      setPinResetRequests([]);
       setLogs([]);
       setActiveTab('dashboard');
       setEditing(null);
@@ -391,6 +438,11 @@ export default function App() {
                 {feedbackSummary.new} error baru
               </button>
             )}
+            {pinResetSummary.pending > 0 && (
+              <button type="button" className="pin-alert" onClick={() => setActiveTab('pin-reset')}>
+                {pinResetSummary.pending} reset PIN
+              </button>
+            )}
             <span className="api-chip">Proxy /api/gas</span>
           </div>
         </header>
@@ -420,6 +472,10 @@ export default function App() {
               <button type="button" className="metric feedback-metric" onClick={() => setActiveTab('feedback')}>
                 <span>Feedback Error</span>
                 <strong>{feedbackSummary.new}</strong>
+              </button>
+              <button type="button" className="metric pin-metric" onClick={() => setActiveTab('pin-reset')}>
+                <span>Reset PIN</span>
+                <strong>{pinResetSummary.pending}</strong>
               </button>
               <div className="metric">
                 <span>Log IP</span>
@@ -650,6 +706,95 @@ export default function App() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'pin-reset' && (
+          <section className="panel tab-view">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Reset PIN Admin</p>
+                <h3>Request dari aplikasi lokal</h3>
+              </div>
+              <span>{loading ? 'Memuat...' : `${pinResetSummary.pending} menunggu dari ${pinResetSummary.total} request`}</span>
+            </div>
+
+            <section className="feedback-stats pin-reset-stats" aria-label="Ringkasan reset PIN">
+              <div>
+                <span>Menunggu</span>
+                <strong>{pinResetSummary.pending}</strong>
+              </div>
+              <div>
+                <span>Dipakai</span>
+                <strong>{pinResetSummary.confirmed}</strong>
+              </div>
+              <div>
+                <span>Expired</span>
+                <strong>{pinResetSummary.expired}</strong>
+              </div>
+              <div>
+                <span>Total</span>
+                <strong>{pinResetSummary.total}</strong>
+              </div>
+            </section>
+
+            <div className="pin-reset-list">
+              {!loading && pinResetRequests.length === 0 && (
+                <p className="empty compact">Belum ada request reset PIN admin.</p>
+              )}
+              {pinResetRequests.map((item) => (
+                <article key={item.id || item.reset_token} className="pin-reset-item">
+                  <div className="pin-reset-main">
+                    <div>
+                      <p className="eyebrow">{formatDateTime(item.timestamp)}</p>
+                      <h4>{item.clinic_name || item.clinic_id || 'Klinik tidak dikenal'}</h4>
+                      <p className="muted mono">{item.license_key || '-'}</p>
+                    </div>
+                    <span className={`status pin-${item.status || 'pending'}`}>
+                      {pinResetStatusLabel(item.status)}
+                    </span>
+                  </div>
+
+                  <div className="pin-code-row">
+                    <div>
+                      <span>Reset PIN</span>
+                      <strong className="mono">{item.reset_pin || '-'}</strong>
+                    </div>
+                    <div>
+                      <span>Expired</span>
+                      <strong>{formatDateTime(item.expires_at)}</strong>
+                    </div>
+                    <div>
+                      <span>Device</span>
+                      <strong className="mono">{item.device_id || '-'}</strong>
+                    </div>
+                    <div>
+                      <span>App</span>
+                      <strong>{[item.app_name, item.app_version, item.os_name].filter(Boolean).join(' / ') || '-'}</strong>
+                    </div>
+                  </div>
+
+                  <dl className="feedback-meta pin-reset-meta">
+                    <div>
+                      <dt>Token</dt>
+                      <dd className="mono">{item.reset_token || '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>IP</dt>
+                      <dd className="mono">{item.ip || '-'}</dd>
+                    </div>
+                    <div>
+                      <dt>Confirmed</dt>
+                      <dd>{formatDateTime(item.confirmed_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>Pesan</dt>
+                      <dd>{item.message || '-'}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
             </div>
           </section>
         )}
