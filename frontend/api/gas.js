@@ -11,6 +11,7 @@ const PUBLIC_ACTIONS = [
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     return sendJson_(response, 405, {
+      ok: false,
       success: false,
       message: 'Method tidak diizinkan. Gunakan POST.',
     });
@@ -21,6 +22,7 @@ export default async function handler(request, response) {
 
   if (!gasApiUrl || !gasApiSecret) {
     return sendJson_(response, 500, {
+      ok: false,
       success: false,
       message: 'GAS_API_URL atau GAS_API_SECRET belum diset di server.',
     });
@@ -31,6 +33,7 @@ export default async function handler(request, response) {
     const action = String(body.action || '');
     if (!PUBLIC_ACTIONS.includes(action) && !isAdminRequestAuthenticated(request)) {
       return sendJson_(response, 401, {
+        ok: false,
         success: false,
         message: 'Silakan login admin terlebih dahulu.',
       });
@@ -56,6 +59,7 @@ export default async function handler(request, response) {
       payload = JSON.parse(text);
     } catch (error) {
       return sendJson_(response, 502, {
+        ok: false,
         success: false,
         message: `Response GAS bukan JSON valid: ${text.slice(0, 120)}`,
       });
@@ -64,6 +68,7 @@ export default async function handler(request, response) {
     return sendJson_(response, gasResponse.ok ? 200 : gasResponse.status, normalizeResponse_(payload));
   } catch (error) {
     return sendJson_(response, 500, {
+      ok: false,
       success: false,
       message: error.message || 'Proxy gagal memproses request.',
     });
@@ -119,26 +124,20 @@ async function readJsonBody_(request) {
 }
 
 function normalizeResponse_(payload) {
-  if (payload && typeof payload.ok === 'boolean') {
-    const message = payload.message || payload.error || (payload.ok ? 'Request berhasil.' : 'Request gagal.');
-    return {
-      ok: payload.ok,
-      success: payload.ok,
-      message,
-      ...(payload.error !== undefined ? { error: payload.error } : {}),
-      ...(payload.data !== undefined ? { data: payload.data } : {}),
-      ...(payload.meta !== undefined ? { meta: payload.meta } : {}),
-    };
-  }
+  if (payload && typeof payload === 'object') {
+    const hasOk = typeof payload.ok === 'boolean';
+    const hasSuccess = typeof payload.success === 'boolean';
 
-  if (payload && typeof payload.success === 'boolean') {
-    return {
-      ok: payload.success,
-      success: payload.success,
-      message: payload.message || (payload.success ? 'Request berhasil.' : 'Request gagal.'),
-      ...(payload.data !== undefined ? { data: payload.data } : {}),
-      ...(payload.meta !== undefined ? { meta: payload.meta } : {}),
-    };
+    if (hasOk || hasSuccess) {
+      const ok = hasOk ? payload.ok : payload.success;
+      const message = payload.message || payload.error || (ok ? 'Request berhasil.' : 'Request gagal.');
+      return {
+        ...payload,
+        ok,
+        success: ok,
+        message,
+      };
+    }
   }
 
   return {

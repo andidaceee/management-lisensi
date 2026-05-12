@@ -28,7 +28,7 @@ license-management/
 
 - Generate license key otomatis saat klinik didaftarkan.
 - Verifikasi lisensi dari aplikasi desktop.
-- Update status lisensi: `trial`, `active`, `expired`, `blocked`.
+- Update status lisensi: `active`, `suspended`, `blocked`, `revoked`, `expired`.
 - Set tanggal expired.
 - Log sederhana untuk register, update, dan verify.
 
@@ -49,12 +49,13 @@ ADMIN_PASSWORD=password-admin
 ADMIN_SESSION_SECRET=secret-session-acak
 ```
 
-Admin dashboard memakai cookie session HTTP-only. Action publik hanya
-`verify_license`, `report_feedback`, dan alias `report_error`. Action admin seperti
-`list_licenses`, `register_clinic`, `create_license`, `update_license`,
-`reset_device`, `delete_license`, `revoke_license`, `block_license`, `list_logs`,
-`list_feedback`, `list_error_reports`, `update_feedback_status`, dan
-`dashboard_snapshot` wajib login admin.
+Admin dashboard memakai cookie session HTTP-only. Action publik untuk aplikasi
+desktop adalah `verify_license`, `report_feedback`, alias `report_error`,
+`request_admin_pin_reset`, dan `confirm_admin_pin_reset`. Action admin seperti
+`dashboard_snapshot`, `list_licenses`, `register_clinic`, `create_license`,
+`update_license`, `reset_device`, `delete_license`, `revoke_license`,
+`block_license`, `list_logs`, `list_feedback`, `list_error_reports`,
+`update_feedback_status`, dan `list_admin_pin_reset_requests` wajib login admin.
 
 ## API Actions
 
@@ -65,10 +66,22 @@ Semua request memakai POST JSON body:
 - `update_license`
 - `list_licenses`
 - `dashboard_snapshot`
+- `reset_device`
+- `delete_license`
+- `revoke_license`
+- `block_license`
 - `report_feedback`
 - `report_error`
+- `request_admin_pin_reset`
+- `confirm_admin_pin_reset`
+- `list_admin_pin_reset_requests`
 
 Detail backend ada di `gas/README.md`.
+
+Semua response sukses dan gagal menyertakan dua flag kompatibilitas: `ok` dan
+`success`. Keduanya selalu bernilai sama. Untuk `verify_license`, nilai flag
+mengikuti validitas lisensi; untuk action admin, `true` berarti request berhasil
+diproses.
 
 ## Kontrak Dashboard Snapshot
 
@@ -103,6 +116,8 @@ dan maksimum 200.
 ```json
 {
   "ok": true,
+  "success": true,
+  "message": "Data license berhasil diambil.",
   "data": [],
   "meta": {
     "limit": 50,
@@ -120,7 +135,9 @@ tetap memakai bentuk:
 ```json
 {
   "ok": true,
+  "success": true,
   "valid": true,
+  "message": "License valid.",
   "license": {
     "clinic_id": "CLN-12345678",
     "status": "active",
@@ -146,8 +163,10 @@ Response gagal:
 ```json
 {
   "ok": false,
+  "success": false,
   "valid": false,
   "error": "License sudah expired.",
+  "message": "License sudah expired.",
   "data": {
     "valid": false,
     "reason": "expired"
@@ -174,6 +193,7 @@ dibatasi dengan rate limit 120 detik.
 ```json
 {
   "ok": true,
+  "success": true,
   "message": "Laporan error berhasil dikirim"
 }
 ```
