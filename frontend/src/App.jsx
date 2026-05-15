@@ -36,7 +36,11 @@ function getExpiredAt(duration) {
     date.setDate(date.getDate() + 3);
   }
 
-  return date.toISOString().slice(0, 10);
+  // Return a local date-only string YYYY-MM-DD without timezone conversion
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function formatDate(value) {
@@ -62,6 +66,14 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function toDateInputValue(value) {
+  if (!value) return '';
+  const s = String(value);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return '';
 }
 
 function statusLabel(status) {
@@ -925,7 +937,7 @@ export default function App() {
                 Expired at
                 <input
                   type="date"
-                  value={(editing.expired_at || '').slice(0, 10)}
+                  value={toDateInputValue(editing.expired_at)}
                   onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
                 />
               </label>
