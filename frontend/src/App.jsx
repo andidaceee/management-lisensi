@@ -76,6 +76,14 @@ function toDateInputValue(value) {
   return '';
 }
 
+function toDateOnly(value) {
+  if (!value) return '';
+  const s = String(value).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return '';
+}
+
 function statusLabel(status) {
   return status || 'unknown';
 }
@@ -316,7 +324,8 @@ export default function App() {
       await apiRequest('update_license', {
         license_key: editing.license_key,
         status: editing.status,
-        expired_at: editing.expired_at,
+        // send date-only YYYY-MM-DD to backend without timezone conversion
+        expired_at: toDateOnly(editing.expired_at) || editing.expired_at || '',
       });
       setMessage(`Lisensi ${editing.license_key} diperbarui.`);
       setEditing(null);
@@ -937,7 +946,7 @@ export default function App() {
                 Expired at
                 <input
                   type="date"
-                  value={toDateInputValue(editing.expired_at)}
+                  value={toDateOnly(editing.expired_at)}
                   onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
                 />
               </label>
