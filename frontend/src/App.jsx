@@ -80,6 +80,14 @@ function statusLabel(status) {
   return status || 'unknown';
 }
 
+function toDateOnly(value) {
+  if (!value) return '';
+  const s = String(value).trim();
+  const match = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  return '';
+}
+
 function feedbackStatusLabel(status) {
   const labels = {
     new: 'Baru',
@@ -100,6 +108,9 @@ function pinResetStatusLabel(status) {
 }
 
 export default function App() {
+  useEffect(() => {
+    // no-op effect placeholder for editing changes
+  }, [editing && editing.expired_at]);
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
@@ -197,6 +208,7 @@ export default function App() {
     setError('');
     try {
       const data = await apiRequest('dashboard_snapshot');
+      // response inspected during debugging (removed logs)
       setLicenseSummary(data.summary || null);
       setLicenses(data.licenses || []);
       setFeedback(data.feedback || []);
@@ -313,10 +325,11 @@ export default function App() {
     setError('');
     setMessage('');
     try {
+      const payloadExpired = toDateOnly(editing.expired_at) || editing.expired_at || '';
       await apiRequest('update_license', {
         license_key: editing.license_key,
         status: editing.status,
-        expired_at: editing.expired_at,
+        expired_at: payloadExpired,
       });
       setMessage(`Lisensi ${editing.license_key} diperbarui.`);
       setEditing(null);
@@ -937,8 +950,8 @@ export default function App() {
                 Expired at
                 <input
                   type="date"
-                  value={toDateInputValue(editing.expired_at)}
-                  onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
+                    value={toDateOnly(editing.expired_at)}
+                    onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
                 />
               </label>
               <label>
