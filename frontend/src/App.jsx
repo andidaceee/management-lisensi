@@ -84,6 +84,22 @@ function toDateOnly(value) {
   return '';
 }
 
+function toDateOnlyLocal(value) {
+  if (!value) return '';
+  const s = String(value).trim();
+  // If value contains time information, parse and convert to local date
+  if (s.includes('T')) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    }
+  }
+  return toDateOnly(s);
+}
+
 function statusLabel(status) {
   return status || 'unknown';
 }
@@ -321,12 +337,13 @@ export default function App() {
     setError('');
     setMessage('');
     try {
-      await apiRequest('update_license', {
+      const payload = {
         license_key: editing.license_key,
         status: editing.status,
         // send date-only YYYY-MM-DD to backend without timezone conversion
-        expired_at: toDateOnly(editing.expired_at) || editing.expired_at || '',
-      });
+        expired_at: editing.expired_at || toDateOnly(editing.expired_at) || '',
+      };
+      await apiRequest('update_license', payload);
       setMessage(`Lisensi ${editing.license_key} diperbarui.`);
       setEditing(null);
       await refreshAll();
@@ -714,7 +731,15 @@ export default function App() {
                       <td>{formatDate(item.expired_at)}</td>
                       <td>
                         <div className="table-actions">
-                          <button className="small-button" onClick={() => setEditing(item)}>
+                          <button
+                            className="small-button"
+                            onClick={() => {
+                              setEditing({
+                                ...item,
+                                expired_at: toDateOnlyLocal(item.expired_at || item.expires_at || item.expired),
+                              });
+                            }}
+                          >
                             Edit
                           </button>
                           <button
@@ -946,7 +971,7 @@ export default function App() {
                 Expired at
                 <input
                   type="date"
-                  value={toDateOnly(editing.expired_at)}
+                  value={editing?.expired_at || ''}
                   onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
                 />
               </label>
