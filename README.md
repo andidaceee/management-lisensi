@@ -174,13 +174,33 @@ Response gagal:
 }
 ```
 
+Jika lisensi sudah pernah terikat `device_id`, request berikutnya wajib tetap
+mengirim `device_id`. Request tanpa `device_id` akan ditolak:
+
+```json
+{
+  "ok": false,
+  "success": false,
+  "valid": false,
+  "error": "Device ID wajib dikirim untuk lisensi yang sudah terikat device.",
+  "message": "Device ID wajib dikirim untuk lisensi yang sudah terikat device.",
+  "data": {
+    "valid": false,
+    "reason": "device_id_required",
+    "status": "active"
+  }
+}
+```
+
 Backend men-throttle penulisan `last_checked_at`, `logs`, dan `audit_logs` untuk
 verifikasi valid selama 6 jam. Verifikasi invalid, lisensi tidak ditemukan, dan
 binding device baru tetap dicatat agar audit admin tetap aman.
 
-`device_id` bersifat opsional. Jika dikirim dan lisensi belum punya device, backend
-akan binding device pertama dengan `LockService`. Jika tidak dikirim, backend hanya
-memverifikasi `clinic_id` dan `license_key` tanpa menyimpan device kosong.
+`device_id` hanya boleh kosong sebelum lisensi pertama kali terikat device. Jika
+dikirim dan lisensi belum punya device, backend akan binding device pertama dengan
+`LockService`. Setelah itu aplikasi desktop harus selalu mengirim `device_id` yang
+sama. Fallback offline di aplikasi desktop hanya boleh menerima cache lokal yang
+masih valid, belum expired, dan milik device yang sama.
 
 ## Kontrak Error Report
 
