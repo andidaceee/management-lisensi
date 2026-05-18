@@ -149,6 +149,14 @@ a {
   box-shadow: 0 12px 24px rgba(6, 24, 20, 0.18);
 }
 
+.nav-tab {
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.nav-tab:active {
+  transform: translateY(1px);
+}
+
 .workspace {
   display: grid;
   gap: 24px;
@@ -325,9 +333,15 @@ small {
 .panel {
   border: 1px solid rgba(216, 222, 214, 0.92);
   border-radius: 8px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 18px 44px rgba(23, 55, 47, 0.07);
+  padding: 20px 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,252,249,0.95));
+  box-shadow: 0 22px 56px rgba(23, 55, 47, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.panel:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 32px 80px rgba(23, 55, 47, 0.10);
 }
 
 .dashboard-grid {
@@ -485,8 +499,9 @@ textarea:focus {
 .table-wrap {
   overflow-x: auto;
   border: 1px solid #e3e9e0;
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 10px;
+  background: linear-gradient(180deg,#ffffff,#fbfefb);
+  box-shadow: 0 8px 28px rgba(20,34,29,0.04);
 }
 
 table {
@@ -512,6 +527,14 @@ th {
   background: #f7f9f4;
   font-size: 12px;
   text-transform: uppercase;
+}
+
+thead th {
+  border-bottom: 2px solid #e7ece4;
+}
+
+td {
+  transition: background 120ms ease, color 120ms ease;
 }
 
 tbody tr {
@@ -784,13 +807,17 @@ td small {
 .small-button {
   min-height: 34px;
   padding: 0 12px;
-  background: #26352e;
-  box-shadow: 0 8px 16px rgba(38, 53, 46, 0.12);
+  background: linear-gradient(180deg,#2b4a3f,#223a33);
+  box-shadow: 0 8px 18px rgba(21, 44, 38, 0.12);
+  color: #fff;
+  border: 0;
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
 }
 
 .small-button.secondary {
-  background: #eef2ec;
-  color: #26352e;
+  background: #f3f6f2;
+  color: #20332d;
+  border: 1px solid #e3e9e0;
 }
 
 .small-button.secondary:hover {
@@ -826,6 +853,35 @@ td small {
 .notice.error {
   background: #ffe5e1;
   color: #98291d;
+}
+
+/* Modal styles for edit dialog */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 12, 0.48);
+  display: grid;
+  place-items: center;
+  z-index: 1200;
+  padding: 24px;
+}
+
+.modal {
+  width: min(100%, 920px);
+  max-width: 920px;
+}
+
+.modal-content {
+  box-shadow: 0 40px 80px rgba(6, 24, 20, 0.36);
+  border-radius: 12px;
+}
+
+.modal small.muted {
+  display: block;
+  margin-top: 6px;
+  color: #68736a;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .empty {

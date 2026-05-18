@@ -100,6 +100,27 @@ function toDateOnlyLocal(value) {
   return toDateOnly(s);
 }
 
+function toDatetimeLocalInput(value) {
+  if (!value) return '';
+  const s = String(value).trim();
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${dd}T${hh}:${mm}`;
+}
+
+function datetimeLocalToDateOnly(localValue) {
+  if (!localValue) return '';
+  const s = String(localValue);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  return '';
+}
+
 function statusLabel(status) {
   return status || 'unknown';
 }
@@ -141,6 +162,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const summary = useMemo(() => {
     if (licenseSummary) {
@@ -337,15 +359,20 @@ export default function App() {
     setError('');
     setMessage('');
     try {
+      // prefer explicit datetime-local if provided, but send date-only YYYY-MM-DD
+      const expired_at_payload = editing.expired_at_datetime
+        ? datetimeLocalToDateOnly(editing.expired_at_datetime)
+        : (editing.expired_at || toDateOnly(editing.expired_at) || '');
+
       const payload = {
         license_key: editing.license_key,
         status: editing.status,
-        // send date-only YYYY-MM-DD to backend without timezone conversion
-        expired_at: editing.expired_at || toDateOnly(editing.expired_at) || '',
+        expired_at: expired_at_payload,
       };
       await apiRequest('update_license', payload);
       setMessage(`Lisensi ${editing.license_key} diperbarui.`);
       setEditing(null);
+      setShowEditModal(false);
       await refreshAll();
     } catch (err) {
       setError(err.message || 'Gagal memperbarui lisensi.');
@@ -737,7 +764,9 @@ export default function App() {
                               setEditing({
                                 ...item,
                                 expired_at: toDateOnlyLocal(item.expired_at || item.expires_at || item.expired),
+                                expired_at_datetime: toDatetimeLocalInput(item.expired_at || item.expires_at || item.expired),
                               });
+                              setShowEditModal(true);
                             }}
                           >
                             Edit
@@ -948,58 +977,75 @@ export default function App() {
           </section>
         )}
 
-        {editing && (
-          <section className="panel two-column edit-panel">
-            <div>
-              <p className="eyebrow">Edit Lisensi</p>
-              <h3>{editing.clinic_name}</h3>
-              <p className="mono muted">{editing.license_key}</p>
+        {showEditModal && editing && (
+          <div className="modal-backdrop" onClick={() => { setShowEditModal(false); setEditing(null); }}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <section className="panel two-column edit-panel modal-content">
+                <div>
+                  <p className="eyebrow">Edit Lisensi</p>
+                  <h3>{editing.clinic_name}</h3>
+                  <p className="mono muted">{editing.license_key}</p>
+                </div>
+                <form onSubmit={handleUpdate}>
+                  <label>
+                    Status
+                    <select
+                      value={editing.status}
+                      onChange={(event) => setEditing({ ...editing, status: event.target.value })}
+                    >
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Expired at (Tanggal)
+                    <input
+                      type="date"
+                      value={editing?.expired_at || ''}
+                      onChange={(event) => setEditing({ ...editing, expired_at: event.target.value, expired_at_datetime: '' })}
+                    />
+                  </label>
+
+                  <label>
+                    Atau waktu kustom (Tanggal & Waktu)
+                    <input
+                      type="datetime-local"
+                      value={editing?.expired_at_datetime || ''}
+                      onChange={(event) => setEditing({ ...editing, expired_at_datetime: event.target.value })}
+                    />
+                    <small className="muted">Jika diisi, bagian waktu akan digunakan untuk menentukan tanggal (waktu akan diabaikan saat disimpan).</small>
+                  </label>
+
+                  <label>
+                    Masa aktif cepat
+                    <select
+                      value=""
+                      onChange={(event) => {
+                        if (!event.target.value) return;
+                        setEditing({ ...editing, expired_at: getExpiredAt(event.target.value), expired_at_datetime: '' });
+                      }}
+                    >
+                      <option value="">Pilih masa aktif</option>
+                      {durationOptions.map((duration) => (
+                        <option key={duration.value} value={duration.value}>{duration.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="button-row">
+                    <button type="submit" disabled={saving}>
+                      {saving ? 'Menyimpan...' : 'Simpan'}
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => { setShowEditModal(false); setEditing(null); }}>
+                      Batal
+                    </button>
+                  </div>
+                </form>
+              </section>
             </div>
-            <form onSubmit={handleUpdate}>
-              <label>
-                Status
-                <select
-                  value={editing.status}
-                  onChange={(event) => setEditing({ ...editing, status: event.target.value })}
-                >
-                  {statusOptions.map((status) => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Expired at
-                <input
-                  type="date"
-                  value={editing?.expired_at || ''}
-                  onChange={(event) => setEditing({ ...editing, expired_at: event.target.value })}
-                />
-              </label>
-              <label>
-                Masa aktif cepat
-                <select
-                  value=""
-                  onChange={(event) => {
-                    if (!event.target.value) return;
-                    setEditing({ ...editing, expired_at: getExpiredAt(event.target.value) });
-                  }}
-                >
-                  <option value="">Pilih masa aktif</option>
-                  {durationOptions.map((duration) => (
-                    <option key={duration.value} value={duration.value}>{duration.label}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="button-row">
-                <button type="submit" disabled={saving}>
-                  {saving ? 'Menyimpan...' : 'Simpan'}
-                </button>
-                <button type="button" className="ghost-button" onClick={() => setEditing(null)}>
-                  Batal
-                </button>
-              </div>
-            </form>
-          </section>
+          </div>
         )}
       </section>
     </main>

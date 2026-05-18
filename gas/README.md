@@ -154,6 +154,10 @@ Response `verify_license` yang tidak valid tetap JSON normal, tetapi `ok` dan
 }
 ```
 
+Jika lisensi sudah terikat device, `device_id` wajib dikirim pada setiap
+`verify_license`. Request tanpa `device_id` ditolak dengan reason
+`device_id_required`.
+
 Action list yang dipakai dashboard (`list_licenses`, `list_feedback`,
 `list_logs`, dan `list_admin_pin_reset_requests`) mengembalikan `data` sebagai
 array langsung plus `meta` pagination. Action `dashboard_snapshot` mengembalikan

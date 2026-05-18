@@ -21,6 +21,7 @@ const LOG_HEADERS = ['id', 'clinic_id', 'action', 'timestamp', 'ip'];
 const ALLOWED_STATUSES = ['active', 'suspended', 'blocked', 'revoked', 'expired'];
 const FEEDBACK_STATUSES = ['new', 'reviewing', 'resolved', 'ignored'];
 const VERIFY_CACHE_SECONDS = 600;
+const VERIFY_CONTRACT_VERSION = 'device-required-v2';
 const VERIFY_WRITE_THROTTLE_HOURS = 6;
 const ERROR_REPORT_RATE_LIMIT_SECONDS = 120;
 const ADMIN_PIN_RESET_EXPIRE_MINUTES = 30;
@@ -252,6 +253,27 @@ function verifyLicense_(body, e) {
 
   const license = table.rows[rowIndex];
   const storedDeviceId = license.device_id || '';
+  if (storedDeviceId && !deviceId) {
+    const result = {
+      message: 'Device ID wajib dikirim untuk lisensi yang sudah terikat device.',
+      data: {
+        valid: false,
+        reason: 'device_id_required',
+        status: getEffectiveStatus_(license.status, license.expired_at),
+        clinic_name: license.clinic_name || '',
+        expired_at: license.expired_at || '',
+        license_key: licenseKey,
+        clinic_id: clinicId,
+        device_id: '',
+        mismatch_count: Number(license.mismatch_count || 0),
+        server_time: serverTime,
+      },
+    };
+    appendLog_(clinicId, 'verify_invalid_device_id_required', e, body.ip);
+    result.payload = makeVerifyPayload_(result.data, result.message);
+    putVerifyCache_(cache, cacheKey, result);
+    return result;
+  }
   const initialResult = buildVerifyResult_(license, clinicId, licenseKey, deviceId, serverTime);
   const needsDeviceBinding = Boolean(deviceId && initialResult.data.valid && !storedDeviceId && table.headerMap.device_id !== undefined);
   const needsMismatchHandling = Boolean(initialResult.data.reason === 'device_mismatch');
@@ -1233,6 +1255,7 @@ function makeVerifyCacheKey_(clinicId, licenseKey, deviceId) {
   const version = getLicenseCacheVersion_(clinicId, licenseKey);
   const keySource = [
     'verify',
+    VERIFY_CONTRACT_VERSION,
     version,
     clinicId,
     licenseKey,
@@ -1555,9 +1578,37 @@ function getEffectiveStatus_(status, expiredAt) {
 }
 
 function isExpired_(expiredAt) {
-  if (!expiredAt) return false;
-  const expiredDate = new Date(expiredAt);
-  return !isNaN(expiredDate.getTime()) && expiredDate.getTime() < startOfToday_().getTime();
+  const expiryEnd = parseExpiryEndOfDay_(expiredAt);
+  if (!expiryEnd) return false;
+  return new Date().getTime() > expiryEnd.getTime();
+}
+
+function parseExpiryEndOfDay_(expiredAt) {
+  if (!expiredAt) return null;
+
+  let date;
+  if (Object.prototype.toString.call(expiredAt) === '[object Date]' && !isNaN(expiredAt.getTime())) {
+    date = new Date(expiredAt.getTime());
+  } else {
+    const text = String(expiredAt).trim();
+    if (!text) return null;
+
+    const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDate) {
+      date = new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]));
+    } else {
+      const slashDate = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (slashDate) {
+        date = new Date(Number(slashDate[3]), Number(slashDate[2]) - 1, Number(slashDate[1]));
+      } else {
+        date = parseFlexibleDate_(text);
+      }
+    }
+  }
+
+  if (!date || isNaN(date.getTime())) return null;
+  date.setHours(23, 59, 59, 999);
+  return date;
 }
 
 function required_(value, field) {
