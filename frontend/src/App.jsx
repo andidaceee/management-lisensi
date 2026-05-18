@@ -45,6 +45,16 @@ function getExpiredAt(duration) {
 
 function formatDate(value) {
   if (!value) return 'Lifetime';
+  const dateOnly = toDateOnlyLocal(value);
+  if (dateOnly) {
+    const [year, month, day] = dateOnly.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day);
+    return localDate.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('id-ID', {
@@ -87,6 +97,21 @@ function toDateOnly(value) {
 function toDateOnlyLocal(value) {
   if (!value) return '';
   const s = String(value).trim();
+  const directDate = toDateOnly(s);
+  if (directDate && !s.includes('T')) return directDate;
+
+  // Google Apps Script serializes date-only Sheets cells as UTC timestamps.
+  // For a sheet in Asia/Jakarta, 2026-05-19 becomes 2026-05-18T17:00:00.000Z.
+  // Convert that midnight-in-script-timezone timestamp back to the intended calendar date.
+  const gasDateOnly = s.match(/^(\d{4}-\d{2}-\d{2})T17:00:00(?:\.000)?Z$/);
+  if (gasDateOnly) {
+    const shifted = new Date(s);
+    if (!Number.isNaN(shifted.getTime())) {
+      shifted.setUTCDate(shifted.getUTCDate() + 1);
+      return shifted.toISOString().slice(0, 10);
+    }
+  }
+
   // If value contains time information, parse and convert to local date
   if (s.includes('T')) {
     const d = new Date(s);
@@ -97,12 +122,14 @@ function toDateOnlyLocal(value) {
       return `${y}-${m}-${dd}`;
     }
   }
-  return toDateOnly(s);
+  return directDate;
 }
 
 function toDatetimeLocalInput(value) {
   if (!value) return '';
   const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
+  if (/^\d{4}-\d{2}-\d{2}T17:00:00(?:\.000)?Z$/.test(s)) return '';
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return '';
   const y = d.getFullYear();
@@ -231,6 +258,17 @@ export default function App() {
       { total: 0, withIp: 0, failed: 0 },
     );
   }, [logs]);
+
+  const dashboardHealth = useMemo(() => {
+    const total = Math.max(summary.total, 1);
+    const needsAttention = summary.expired + summary.blocked + summary.suspended;
+    return {
+      activeRate: Math.round((summary.active / total) * 100),
+      deviceRate: Math.round((summary.boundDevices / total) * 100),
+      attentionRate: Math.round((needsAttention / total) * 100),
+      needsAttention,
+    };
+  }, [summary]);
 
   const attentionLicenses = useMemo(() => {
     return licenses
@@ -521,34 +559,80 @@ export default function App() {
 
         {activeTab === 'dashboard' && (
           <section className="tab-view" aria-label="Dashboard">
+            <section className="dashboard-hero" aria-label="Ringkasan utama dashboard">
+              <div className="hero-copy">
+                <p className="eyebrow">Executive Overview</p>
+                <h3>Dashboard lisensi yang siap dipantau setiap hari.</h3>
+                <p className="muted">
+                  Ringkasan klinik aktif, device terikat, reset PIN, feedback error, dan log aktivitas terbaru.
+                </p>
+              </div>
+              <div className="hero-score-card">
+                <span>Health Score</span>
+                <strong>{dashboardHealth.activeRate}%</strong>
+                <small>{dashboardHealth.needsAttention} lisensi perlu perhatian</small>
+              </div>
+            </section>
+
             <section className="summary-grid" aria-label="Ringkasan lisensi">
-              <div className="metric primary">
-                <span>Jumlah Klinik</span>
+              <div className="metric primary metric-total">
+                <span>Total Klinik</span>
                 <strong>{summary.total}</strong>
+                <small>Semua lisensi terdaftar</small>
               </div>
               <div className="metric">
                 <span>Aktif</span>
                 <strong>{summary.active}</strong>
+                <small>{dashboardHealth.activeRate}% dari total klinik</small>
               </div>
               <div className="metric">
                 <span>Device Terikat</span>
                 <strong>{summary.boundDevices}</strong>
+                <small>{dashboardHealth.deviceRate}% sudah aktivasi</small>
               </div>
               <div className="metric danger">
                 <span>Perlu Cek</span>
-                <strong>{summary.expired + summary.blocked + summary.suspended}</strong>
+                <strong>{dashboardHealth.needsAttention}</strong>
+                <small>{dashboardHealth.attentionRate}% butuh tindak lanjut</small>
               </div>
               <button type="button" className="metric feedback-metric" onClick={() => setActiveTab('feedback')}>
                 <span>Feedback Error</span>
                 <strong>{feedbackSummary.new}</strong>
+                <small>{feedbackSummary.total} total laporan</small>
               </button>
               <button type="button" className="metric pin-metric" onClick={() => setActiveTab('pin-reset')}>
                 <span>Reset PIN</span>
                 <strong>{pinResetSummary.pending}</strong>
+                <small>{pinResetSummary.total} total request</small>
               </button>
               <div className="metric">
                 <span>Log IP</span>
                 <strong>{logSummary.withIp}</strong>
+                <small>{logSummary.failed} aktivitas gagal</small>
+              </div>
+            </section>
+
+            <section className="health-strip" aria-label="Kesehatan sistem">
+              <div className="health-item">
+                <div>
+                  <span>Lisensi aktif</span>
+                  <strong>{dashboardHealth.activeRate}%</strong>
+                </div>
+                <div className="progress-track"><span style={{ width: `${dashboardHealth.activeRate}%` }} /></div>
+              </div>
+              <div className="health-item">
+                <div>
+                  <span>Device terikat</span>
+                  <strong>{dashboardHealth.deviceRate}%</strong>
+                </div>
+                <div className="progress-track accent"><span style={{ width: `${dashboardHealth.deviceRate}%` }} /></div>
+              </div>
+              <div className="health-item warning">
+                <div>
+                  <span>Perlu tindakan</span>
+                  <strong>{dashboardHealth.attentionRate}%</strong>
+                </div>
+                <div className="progress-track warning"><span style={{ width: `${dashboardHealth.attentionRate}%` }} /></div>
               </div>
             </section>
 
